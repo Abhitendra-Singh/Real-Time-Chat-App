@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .chat-container { max-width: 1100px; }
+        #chat-messages { height: calc(100vh - 220px); }
+        .message.mine { background-color: #DCF8C6; }
+        .message.theirs { background-color: #FFFFFF; }
+        .message.notification { background-color: #E2E8F0; }
+        .emoji-picker {
+            position: absolute;
+            bottom: 60px;
+            left: 10px;
+            width: 280px;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 4px;
+            padding: 8px;
+            z-index: 10; /* Ensure emoji picker is on top */
+        }
+        .emoji-picker span {
+            cursor: pointer;
+            padding: 4px;
+            text-align: center;
+            border-radius: 4px;
+        }
+        .emoji-picker span:hover {
+            background: #f0f0f0;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <!-- Join Chat Modal -->
+    <div id="join-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
+            <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">Join Chat Room</h2>
+            <form id="join-form">
+                <div class="mb-4">
+                    <label for="username" class="block text-gray-700 text-sm font-bold mb-2">Nickname</label>
+                    <input type="text" id="username" placeholder="Enter your nickname..." class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                <div class="mb-6">
+                    <label for="room" class="block text-gray-700 text-sm font-bold mb-2">Room Name</label>
+                    <input type="text" id="room" placeholder="Enter room name..." class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                <button type="submit" class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:shadow-outline transition duration-300">
+                    Join Chat
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Chat Interface -->
+    <div id="chat-container" class="hidden container mx-auto my-4 bg-white rounded-lg shadow-lg">
+        <header class="bg-blue-500 text-white p-4 flex justify-between items-center rounded-t-lg">
+            <h1 id="room-name" class="text-xl font-bold"></h1>
+            <button id="leave-btn" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Leave Room</button>
+        </header>
+        <main class="grid grid-cols-1 md:grid-cols-4">
+            <!-- User List -->
+            <div id="sidebar" class="col-span-1 bg-gray-200 p-4 border-r border-gray-300">
+                <h2 class="text-lg font-bold mb-4 flex items-center"><i class="fas fa-users mr-2"></i>Users (<span id="user-count"></span>)</h2>
+                <ul id="users" class="list-none space-y-2"></ul>
+            </div>
+
+            <!-- Chat Messages -->
+            <div class="col-span-3 flex flex-col">
+                <div id="chat-messages" class="p-6 overflow-y-auto">
+                    <!-- Messages will be appended here -->
+                </div>
+
+                <!-- Typing Indicator -->
+                <div id="typing-indicator" class="px-6 pb-2 text-sm text-gray-500 h-6"></div>
+
+                <!-- Message Input -->
+                <div class="p-4 bg-gray-100 border-t border-gray-200 relative">
+                     <div id="emoji-picker" class="emoji-picker hidden"></div>
+                    <form id="chat-form" class="flex items-center space-x-3">
+                        <button type="button" id="emoji-btn" class="text-gray-500 hover:text-gray-700 text-2xl">
+                            <i class="far fa-smile"></i>
+                        </button>
+
+                        <input type="file" id="file-input" class="hidden">
+                        <button type="button" id="attach-btn" class="text-gray-500 hover:text-gray-700 text-2xl">
+                            <i class="fas fa-paperclip"></i>
+                        </button>
+
+                        <input id="msg" type="text" placeholder="Enter Message" required autocomplete="off" class="flex-1 border rounded-full py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <button class="bg-blue-500 text-white rounded-full p-2 w-10 h-10 flex items-center justify-center hover:bg-blue-600">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const joinModal = document.getElementById('join-modal');
+            const chatContainer = document.getElementById('chat-container');
+            const joinForm = document.getElementById('join-form');
+            const chatForm = document.getElementById('chat-form');
+            const msgInput = document.getElementById('msg');
+            const chatMessages = document.getElementById('chat-messages');
+            const roomName = document.getElementById('room-name');
+            const userList = document.getElementById('users');
+            const userCount = document.getElementById('user-count');
+            const leaveBtn = document.getElementById('leave-btn');
+            const typingIndicator = document.getElementById('typing-indicator');
+            const emojiBtn = document.getElementById('emoji-btn');
+            const emojiPicker = document.getElementById('emoji-picker');
+            const attachBtn = document.getElementById('attach-btn');
+            const fileInput = document.getElementById('file-input');
+
+            let username = '';
+            let room = '';
+            let typingTimeout;
+            const typingUsers = new Set();
+            
+            const socket = io();
+
+            // --- Join Chat ---
+            joinForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                username = document.getElementById('username').value;
+                room = document.getElementById('room').value;
+                
+                if (username && room) {
+                    socket.emit('joinRoom', { username, room });
+                    joinModal.classList.add('hidden');
+                    chatContainer.classList.remove('hidden');
+                    msgInput.focus();
+                }
+            });
+
+            // --- Leave Chat ---
+            leaveBtn.addEventListener('click', () => {
+                window.location.reload();
+            });
+
+            // --- Message Handling ---
+            socket.on('message', message => {
+                outputMessage(message);
+                // Scroll down
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            });
+
+            chatForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const msgText = msgInput.value.trim();
+
+                if (msgText) {
+                    socket.emit('chatMessage', { content: msgText, type: 'text' });
+                    socket.emit('stopTyping');
+                    msgInput.value = '';
+                    msgInput.focus();
+                }
+            });
+
+            // --- Room & User Info ---
+            socket.on('roomUsers', ({ room, users }) => {
+                outputRoomName(room);
+                outputUsers(users);
+            });
+            
+            // --- Typing Indicator ---
+            msgInput.addEventListener('input', () => {
+                socket.emit('typing');
+                clearTimeout(typingTimeout);
+                typingTimeout = setTimeout(() => {
+                    socket.emit('stopTyping');
+                }, 2000);
+            });
+
+            socket.on('typing', (typingUsername) => {
+                if (typingUsername !== username) {
+                    typingUsers.add(typingUsername);
+                    updateTypingIndicator();
+                }
+            });
+
+            socket.on('stopTyping', (typingUsername) => {
+                typingUsers.delete(typingUsername);
+                updateTypingIndicator();
+            });
+            
+            // --- Emojis ---
+            const emojis = ['👍', '❤️', '😂', '😯', '😢', '😡', '🔥', '🎉', '👋', '😎', '🤔', '💯', '🙏', '💻'];
+            emojis.forEach(emoji => {
+                const span = document.createElement('span');
+                span.textContent = emoji;
+                span.addEventListener('click', () => {
+                    msgInput.value += emoji;
+                    emojiPicker.classList.add('hidden');
+                    msgInput.focus();
+                });
+                emojiPicker.appendChild(span);
+            });
+
+            emojiBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                emojiPicker.classList.toggle('hidden');
+            });
+            
+            document.body.addEventListener('click', () => {
+                if (!emojiPicker.classList.contains('hidden')) {
+                    emojiPicker.classList.add('hidden');
+                }
+            });
+
+            // --- File/Image Attachments ---
+            attachBtn.addEventListener('click', () => {
+                fileInput.click();
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    // Check file size (e.g., limit to 5MB)
+                    if (file.size > 5 * 1024 * 1024) {
+                        alert("File is too large! Please select a file smaller than 5MB.");
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = function(event) {
+                        const fileData = event.target.result;
+                        socket.emit('chatMessage', { content: fileData, type: file.type.startsWith('image/') ? 'image' : 'file', fileName: file.name });
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+            
+            // --- Message Reactions ---
+            chatMessages.addEventListener('click', (e) => {
+                if (e.target.classList.contains('reaction-btn')) {
+                    const messageId = e.target.closest('.message').dataset.messageId;
+                    const reaction = e.target.textContent;
+                    socket.emit('messageReaction', { messageId, reaction });
+                }
+            });
+
+            socket.on('reactionUpdate', ({ messageId, reaction, username: reactingUsername }) => {
+                const messageEl = document.querySelector(`[data-message-id='${messageId}']`);
+                if (messageEl) {
+                    const reactionsContainer = messageEl.querySelector('.reactions');
+                    let reactionEl = reactionsContainer.querySelector(`[data-reaction='${reaction}']`);
+                    
+                    if (!reactionEl) {
+                        // First time this reaction is added to this message
+                        reactionEl = document.createElement('div');
+                        reactionEl.dataset.reaction = reaction;
+                        reactionEl.className = 'reaction bg-blue-100 text-blue-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full cursor-pointer';
+                        reactionEl.innerHTML = `${reaction} <span class="count">1</span>`;
+                        reactionsContainer.appendChild(reactionEl);
+                        reactionEl.dataset.users = reactingUsername;
+                    } else {
+                        // Reaction already exists, update count
+                        let users = reactionEl.dataset.users.split(',');
+                        if (users.includes(reactingUsername)) {
+                           // User is removing their reaction
+                           users = users.filter(u => u !== reactingUsername);
+                        } else {
+                           // User is adding their reaction
+                           users.push(reactingUsername);
+                        }
+                        
+                        reactionEl.dataset.users = users.join(',');
+                        const countSpan = reactionEl.querySelector('.count');
+                        countSpan.textContent = users.length;
+                        
+                        if(users.length === 0){
+                            reactionEl.remove();
+                        }
+                    }
+                }
+            });
+
+            // --- DOM Manipulation Functions ---
+            function outputMessage(message) {
+                const div = document.createElement('div');
+                div.classList.add('message', 'p-3', 'rounded-lg', 'mb-4', 'shadow-sm', 'max-w-md', 'md:max-w-lg');
+                div.dataset.messageId = message.id;
+
+                const isMine = message.username === username;
+                const isNotification = message.type === 'notification';
+
+                if (isNotification) {
+                    div.classList.add('notification', 'text-center', 'text-sm', 'text-gray-600', 'mx-auto');
+                } else if (isMine) {
+                    div.classList.add('mine', 'ml-auto');
+                } else {
+                    div.classList.add('theirs');
+                }
+                
+                let contentHtml = '';
+                if(message.type === 'image') {
+                    contentHtml = `<img src="${message.content}" alt="User image" class="rounded-md max-w-xs mt-2 cursor-pointer" onclick="window.open('${message.content}', '_blank')">`;
+                } else if (message.type === 'file') {
+                    contentHtml = `<a href="${message.content}" download="${message.fileName || 'file'}" class="flex items-center bg-gray-200 p-2 rounded-lg hover:bg-gray-300">
+                        <i class="fas fa-file-alt text-2xl mr-3"></i>
+                        <span>${message.fileName || 'Download File'}</span>
+                    </a>`;
+                } else { // 'text' or 'notification'
+                    // Sanitize text content
+                    const textDiv = document.createElement('div');
+                    textDiv.innerText = message.content;
+                    contentHtml = textDiv.innerHTML;
+                }
+
+                div.innerHTML = `
+                    ${!isNotification ? `<p class="font-bold text-sm ${isMine ? 'text-green-800' : 'text-blue-800'}">${message.username}</p>` : ''}
+                    <div class="text-gray-900">${contentHtml}</div>
+                    <p class="text-right text-xs text-gray-500 mt-1">${message.timestamp}</p>
+                    ${!isNotification ? `
+                    <div class="reactions mt-2 flex items-center"></div>
+                    <div class="reaction-buttons absolute -bottom-4 right-2 bg-white border rounded-full shadow-md p-1 opacity-0 group-hover:opacity-100 transition-opacity hidden">
+                        <span class="reaction-btn cursor-pointer p-1">👍</span>
+                        <span class="reaction-btn cursor-pointer p-1">❤️</span>
+                        <span class="reaction-btn cursor-pointer p-1">😂</span>
+                    </div>` : ''}
+                `;
+                
+                // Add hover effect for reaction buttons
+                if (!isNotification) {
+                    div.classList.add('group', 'relative');
+                    const reactionButtons = div.querySelector('.reaction-buttons');
+                    div.addEventListener('mouseenter', () => reactionButtons.classList.remove('hidden'));
+                    div.addEventListener('mouseleave', () => reactionButtons.classList.add('hidden'));
+                }
+
+                chatMessages.appendChild(div);
+            }
+
+            function outputRoomName(room) {
+                roomName.innerText = room;
+            }
+
+            function outputUsers(users) {
+                userCount.innerText = users.length;
+                userList.innerHTML = `
+                    ${users.map(user => `
+                        <li class="flex items-center space-x-2 text-gray-700">
+                           <i class="fas fa-user-circle text-green-500"></i>
+                           <span>${user.username} ${user.id === socket.id ? '(You)' : ''}</span>
+                        </li>`).join('')}
+                `;
+            }
+
+            function updateTypingIndicator() {
+                if (typingUsers.size === 0) {
+                    typingIndicator.textContent = '';
+                } else if (typingUsers.size === 1) {
+                    const [user] = typingUsers;
+                    typingIndicator.textContent = `${user} is typing...`;
+                } else if (typingUsers.size <= 3) {
+                    const users = Array.from(typingUsers).join(', ');
+                    typingIndicator.textContent = `${users} are typing...`;
+                } else {
+                    typingIndicator.textContent = 'Several people are typing...';
+                }
+            }
+        });
+    </script>
+</body>
+</html>
+
