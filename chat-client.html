@@ -1,113 +1,145 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-Time Chat</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-        .chat-container { max-width: 1100px; }
-        #chat-messages { height: calc(100vh - 220px); }
-        .message.mine { background-color: #DCF8C6; }
-        .message.theirs { background-color: #FFFFFF; }
-        .message.notification { background-color: #E2E8F0; }
-        .emoji-picker {
-            position: absolute;
-            bottom: 60px;
-            left: 10px;
-            width: 280px;
-            background: white;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
-            gap: 4px;
-            padding: 8px;
-            z-index: 10; /* Ensure emoji picker is on top */
-        }
-        .emoji-picker span {
-            cursor: pointer;
-            padding: 4px;
-            text-align: center;
-            border-radius: 4px;
-        }
-        .emoji-picker span:hover {
-            background: #f0f0f0;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-Time Chat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    #chat-messages { height: calc(100vh - 180px); }
+    .message.mine { background-color: #DCF8C6; }
+    .message.theirs { background-color: #FFFFFF; }
+    .message.notification { background-color: #E2E8F0; }
+    .emoji-picker {
+      position: absolute;
+      bottom: 60px;
+      left: 10px;
+      width: 260px;
+      max-height: 200px;
+      overflow-y: auto;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 6px;
+      padding: 10px;
+      z-index: 20;
+    }
+    .emoji-picker span {
+      cursor: pointer;
+      padding: 4px;
+      text-align: center;
+      border-radius: 6px;
+      transition: background 0.2s;
+    }
+    .emoji-picker span:hover {
+      background: #f3f4f6;
+    }
+  </style>
 </head>
 <body class="bg-gray-100">
 
-    <!-- Join Chat Modal -->
-    <div id="join-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center">
-        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
-            <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">Join Chat Room</h2>
-            <form id="join-form">
-                <div class="mb-4">
-                    <label for="username" class="block text-gray-700 text-sm font-bold mb-2">Nickname</label>
-                    <input type="text" id="username" placeholder="Enter your nickname..." class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                </div>
-                <div class="mb-6">
-                    <label for="room" class="block text-gray-700 text-sm font-bold mb-2">Room Name</label>
-                    <input type="text" id="room" placeholder="Enter room name..." class="shadow appearance-none border rounded-lg w-full py-3 px-4 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                </div>
-                <button type="submit" class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:shadow-outline transition duration-300">
-                    Join Chat
-                </button>
-            </form>
+  <!-- Join Chat Modal -->
+  <div id="join-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-30">
+    <div class="bg-white p-8 rounded-2xl shadow-xl w-11/12 max-w-md">
+      <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">Join Chat Room</h2>
+      <form id="join-form" class="space-y-4">
+        <div>
+          <label for="username" class="block text-gray-700 text-sm font-bold mb-2">Nickname</label>
+          <input type="text" id="username" placeholder="Enter your nickname..."
+            class="w-full py-3 px-4 border rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" required>
         </div>
+        <div>
+          <label for="room" class="block text-gray-700 text-sm font-bold mb-2">Room Name</label>
+          <input type="text" id="room" placeholder="Enter room name..."
+            class="w-full py-3 px-4 border rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" required>
+        </div>
+        <button type="submit"
+          class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-xl shadow-md transition">
+          Join Chat
+        </button>
+      </form>
     </div>
+  </div>
 
-    <!-- Main Chat Interface -->
-    <div id="chat-container" class="hidden container mx-auto my-4 bg-white rounded-lg shadow-lg">
-        <header class="bg-blue-500 text-white p-4 flex justify-between items-center rounded-t-lg">
-            <h1 id="room-name" class="text-xl font-bold"></h1>
-            <button id="leave-btn" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Leave Room</button>
-        </header>
-        <main class="grid grid-cols-1 md:grid-cols-4">
-            <!-- User List -->
-            <div id="sidebar" class="col-span-1 bg-gray-200 p-4 border-r border-gray-300">
-                <h2 class="text-lg font-bold mb-4 flex items-center"><i class="fas fa-users mr-2"></i>Users (<span id="user-count"></span>)</h2>
-                <ul id="users" class="list-none space-y-2"></ul>
-            </div>
+  <!-- Main Chat Interface -->
+  <div id="chat-container" class="hidden h-screen flex flex-col">
+    <!-- Header -->
+    <header class="bg-blue-500 text-white p-4 flex justify-between items-center shadow-md">
+      <div class="flex items-center space-x-3">
+        <button id="menu-btn" class="md:hidden text-2xl"><i class="fas fa-bars"></i></button>
+        <h1 id="room-name" class="text-lg sm:text-xl font-semibold truncate"></h1>
+      </div>
+      <button id="leave-btn" class="bg-red-500 hover:bg-red-600 text-white text-sm sm:text-base font-bold py-2 px-3 rounded-lg">
+        Leave
+      </button>
+    </header>
 
-            <!-- Chat Messages -->
-            <div class="col-span-3 flex flex-col">
-                <div id="chat-messages" class="p-6 overflow-y-auto">
-                    <!-- Messages will be appended here -->
-                </div>
+    <!-- Content -->
+    <div class="flex flex-1 overflow-hidden">
+      <!-- Sidebar -->
+      <aside id="sidebar"
+        class="fixed md:static top-0 left-0 h-full w-64 bg-gray-100 p-4 border-r border-gray-300 overflow-y-auto transform -translate-x-full md:translate-x-0 transition-transform duration-300 z-20">
+        <h2 class="text-lg font-bold mb-4 flex items-center"><i class="fas fa-users mr-2"></i>Users (<span id="user-count"></span>)</h2>
+        <ul id="users" class="space-y-2"></ul>
+      </aside>
 
-                <!-- Typing Indicator -->
-                <div id="typing-indicator" class="px-6 pb-2 text-sm text-gray-500 h-6"></div>
+      <!-- Overlay for mobile sidebar -->
+      <div id="overlay" class="fixed inset-0 bg-black bg-opacity-50 hidden z-10 md:hidden"></div>
 
-                <!-- Message Input -->
-                <div class="p-4 bg-gray-100 border-t border-gray-200 relative">
-                     <div id="emoji-picker" class="emoji-picker hidden"></div>
-                    <form id="chat-form" class="flex items-center space-x-3">
-                        <button type="button" id="emoji-btn" class="text-gray-500 hover:text-gray-700 text-2xl">
-                            <i class="far fa-smile"></i>
-                        </button>
+      <!-- Chat Area -->
+      <section class="flex-1 flex flex-col bg-white">
+        <!-- Messages -->
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50"></div>
 
-                        <input type="file" id="file-input" class="hidden">
-                        <button type="button" id="attach-btn" class="text-gray-500 hover:text-gray-700 text-2xl">
-                            <i class="fas fa-paperclip"></i>
-                        </button>
+        <!-- Typing Indicator -->
+        <div id="typing-indicator" class="px-4 pb-2 text-sm text-gray-500 h-5"></div>
 
-                        <input id="msg" type="text" placeholder="Enter Message" required autocomplete="off" class="flex-1 border rounded-full py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <button class="bg-blue-500 text-white rounded-full p-2 w-10 h-10 flex items-center justify-center hover:bg-blue-600">
-                            <i class="fas fa-paper-plane"></i>
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </main>
+        <!-- Input -->
+        <div class="p-3 bg-white border-t border-gray-200 relative">
+          <div id="emoji-picker" class="emoji-picker hidden"></div>
+          <form id="chat-form" class="flex items-center space-x-2">
+            <button type="button" id="emoji-btn" class="text-gray-500 hover:text-gray-700 text-xl">
+              <i class="far fa-smile"></i>
+            </button>
+            <input type="file" id="file-input" class="hidden">
+            <button type="button" id="attach-btn" class="text-gray-500 hover:text-gray-700 text-xl">
+              <i class="fas fa-paperclip"></i>
+            </button>
+            <input id="msg" type="text" placeholder="Type a message"
+              class="flex-1 border rounded-full py-2 px-4 focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm sm:text-base"
+              required autocomplete="off">
+            <button
+              class="bg-blue-500 hover:bg-blue-600 text-white rounded-full p-3 flex items-center justify-center shadow-md">
+              <i class="fas fa-paper-plane"></i>
+            </button>
+          </form>
+        </div>
+      </section>
     </div>
+  </div>
 
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const menuBtn = document.getElementById('menu-btn');
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('overlay');
+
+      // Mobile sidebar toggle
+      menuBtn.addEventListener('click', () => {
+        sidebar.classList.remove('-translate-x-full');
+        overlay.classList.remove('hidden');
+      });
+
+      overlay.addEventListener('click', () => {
+        sidebar.classList.add('-translate-x-full');
+        overlay.classList.add('hidden');
+      });
         document.addEventListener('DOMContentLoaded', () => {
             const joinModal = document.getElementById('join-modal');
             const chatContainer = document.getElementById('chat-container');
